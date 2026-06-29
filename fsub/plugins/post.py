@@ -5,6 +5,7 @@ from pyrogram.errors import FloodWait
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from fsub import *
+from fsub.database.data import disable_info # Memastikan fungsi database terimport
 
 @Bot.on_message(
     filters.private
@@ -34,6 +35,78 @@ async def channel_post(client: Bot, message: Message):
     except FloodWait as e:
         await asyncio.sleep(e.value)
         post_message = await message.copy(
+            chat_id=client.db_channel.id, disable_notification=True
+        )
+    except Exception as e:
+        LOGGER(__name__).warning(e)
+        await reply_text.edit_text("Error!")
+        return
+        
+    # Amankan Username dan ID Bot
+    bot_username = client.me.username if client.me else (await client.get_me()).username
+    bot_id = client.me.id if client.me else (await client.get_me()).id
+
+    converted_id = post_message.id * abs(client.db_channel.id)
+    string = f"get-{converted_id}"
+    base64_string = await encode(string)
+    link = f"https://t.me/{bot_username}?start={base64_string}" # Menggunakan bot_username
+
+    reply_markup = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "Bagikan Link", url=f"https://telegram.me/share/url?url={link}"
+                )
+            ]
+        ]
+    )
+
+    await reply_text.edit(
+        f"Link: {link}",
+        reply_markup=reply_markup,
+        disable_web_page_preview=True,
+    )
+
+    if not await disable_info(bot_id): # Menggunakan bot_id tunggal sesuai database
+        try:
+            await post_message.edit_reply_markup(reply_markup)
+        except FloodWait as e:
+            await asyncio.sleep(e.value)
+            await post_message.edit_reply_markup(reply_markup)
+        except Exception:
+            pass
+
+
+@Bot.on_message(filters.channel & filters.incoming & filters.chat(CHANNEL_DB))
+async def new_post(client: Bot, message: Message):
+    # Amankan Username dan ID Bot
+    bot_username = client.me.username if client.me else (await client.get_me()).username
+    bot_id = client.me.id if client.me else (await client.get_me()).id
+
+    if await disable_info(bot_id): # Menggunakan bot_id tunggal sesuai database
+        return
+        
+    converted_id = message.id * abs(client.db_channel.id)
+    string = f"get-{converted_id}"
+    base64_string = await encode(string)
+    link = f"https://t.me/{bot_username}?start={base64_string}" # Menggunakan bot_username
+    
+    reply_markup = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "Bagikan Link", url=f"https://telegram.me/share/url?url={link}"
+                )
+            ]
+        ]
+    )
+    try:
+        await message.edit_reply_markup(reply_markup)
+    except FloodWait as e:
+        await asyncio.sleep(e.value)
+        await message.edit_reply_markup(reply_markup)
+    except Exception:
+        return
             chat_id=client.db_channel.id, disable_notification=True
         )
     except Exception as e:
