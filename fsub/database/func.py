@@ -6,22 +6,38 @@ from pyrogram import Client, filters, types, enums
 from pyrogram.errors import FloodWait, UserNotParticipant
 from fsub.database.data import *
 from fsub import *
-
+from fsub import ADMINS # <- PASTIKAN VARIABEL ADMINS SUDAH ADA DI FILE __init__.py UTAMA
 
 async def subscribed(filter, client, update):
     user_id = update.from_user.id
+    
+    # Mengizinkan admin melewati proteksi kunci bot
     if user_id in ADMINS:
         return True
+        
     sub = await full_fsub()
     if not sub:
-        return False
+        return True # Jika database fsub kosong, bebaskan akses bot
+        
     for channel_id in sub:
         try:
+            # Perbaikan: Menggunakan channel_id dengan benar sesuai loop
             member = await client.get_chat_member(chat_id=channel_id, user_id=user_id)
+            
+            # Cek jika status user di dalam grup/channel tidak valid
+            if member.status not in [
+                enums.ChatMemberStatus.OWNER, 
+                enums.ChatMemberStatus.ADMINISTRATOR, 
+                enums.ChatMemberStatus.MEMBER
+            ]:
+                return False
         except UserNotParticipant:
             return False
+        except Exception as e:
+            print(f"Gagal cek status fsub di chat {channel_id}: {e}")
+            return False
 
-    return member.status in [enums.ChatMemberStatus.OWNER, enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.MEMBER]
+    return True
 
 
 async def encode(string):
