@@ -114,6 +114,107 @@ async def shellrunner(client, message):
             output = stdout.decode("utf-8") if stdout else ""
             output += stderr.decode("utf-8") if stderr else ""
         except Exception:
+            # Perbaikan: Menggunakan format_exc() agar tidak crash di versi Python baru
+            errors = traceback.format_exc()
+            return await message.reply(f"<b>ERROR :</b>\n<pre>{errors}</pre>")
+            
+    if str(output).strip() == "":
+        output = None
+        
+    if output:
+        if len(output) > 4096:
+            with open("output.txt", "w+", encoding="utf-8") as file:
+                file.write(output)
+            await client.send_document(
+                message.chat.id,
+                "output.txt",
+                reply_to_message_id=message.id,
+                caption="<code>Output</code>",
+            )
+            return os.remove("output.txt")
+        await message.reply(f"<b>OUTPUT :</b>\n<pre>{output}</pre>")
+    else:
+        await message.reply("<b>OUTPUT :</b>\n<code>None</code>")
+    stdout, stderr, exc = None, None, None
+    
+    try:
+        await aexec(cmd, client, message)
+    except Exception:
+        exc = traceback.format_exc()
+        
+    stdout = redirected_output.getvalue()
+    stderr = redirected_error.getvalue()
+    sys.stdout = old_stdout
+    sys.stderr = old_stderr
+    
+    evaluation = ""
+    if exc:
+        evaluation += exc
+    elif stderr:
+        evaluation += stderr
+    elif stdout:
+        evaluation += stdout
+    else:
+        evaluation += "Success"
+        
+    final_output = f"<b>⥤ ʀᴇsᴜʟᴛ :</b>\n<pre language='python'>{evaluation}</pre>"
+    if len(final_output) > 4096:
+        filename = "output.txt"
+        with open(filename, "w+", encoding="utf8") as out_file:
+            out_file.write(str(evaluation))
+        t2 = time()
+        
+        await message.reply_document(
+            document=filename,
+            caption=f"<b>⥤ ᴇᴠᴀʟ :</b>\n<code>{cmd[0:980]}</code>\n\n<b>⥤ ʀᴇsᴜʟᴛ :</b>\nAttached Document",
+            quote=False,
+        )
+        await message.delete()
+        os.remove(filename)
+    else:
+        t2 = time()
+        await message.reply(final_output)
+
+
+@Bot.on_message(filters.command("sh") & filters.user(ADMINS))
+async def shellrunner(client, message):
+    if len(message.command) < 2:
+        return await message.reply("<b>ᴇxᴀᴍᴩʟᴇ :</b>\n/sh git pull")
+    text = message.text.split(None, 1)[1]
+    output = ""
+    
+    if "\n" in text:
+        code = text.split("\n")
+        for x in code:
+            shell = re.split(""" (?=(?:[^'"]|'[^']*'|"[^"]*")*$)""", x)
+            try:
+                process = subprocess.Popen(
+                    shell,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                stdout, stderr = process.communicate()
+                output += f"<b>{x}</b>\n"
+                output += stdout.decode("utf-8") if stdout else ""
+                output += stderr.decode("utf-8") if stderr else ""
+                output += "\n"
+            except Exception as err:
+                await message.reply(f"<b>ERROR :</b>\n<pre>{err}</pre>")
+                return
+    else:
+        shell = re.split(""" (?=(?:[^'"]|'[^']*'|"[^"]*")*$)""", text)
+        for a in range(len(shell)):
+            shell[a] = shell[a].replace('"', "")
+        try:
+            process = subprocess.Popen(
+                shell,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            stdout, stderr = process.communicate()
+            output = stdout.decode("utf-8") if stdout else ""
+            output += stderr.decode("utf-8") if stderr else ""
+        except Exception:
             # Perbaikan: Menggunakan format_exc() untuk kompatibilitas Python 3.11+ / 2026
             errors = traceback.format_exc()
             return await message.reply(f"<b>ERROR :</b>\n<pre>{errors}</pre>")
